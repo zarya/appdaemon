@@ -7,7 +7,7 @@ function ha_status(stream, dash, widgets)
         socket.emit('up',dash);
     });
     socket.on("down", function(msg){
-        var data = JSON.parse(event.data)
+        var data = JSON.parse(msg)
         if (data.event_type == "hadashboard")
         {
             if (data.data.command == "navigate")
