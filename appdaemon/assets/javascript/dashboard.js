@@ -1,16 +1,12 @@
 
 function ha_status(stream, dash, widgets)
 {
-
-    var webSocket = new ReconnectingWebSocket(stream);
-            
-    webSocket.onopen = function (event) 
+    var socket = io.connect('http://' + document.domain + ':' + location.port + "/socketio");
+    socket.on("connect", function()
     {
-        webSocket.send(dash);
-    };
-
-    webSocket.onmessage = function (event) 
-    {
+        socket.emit('up',dash);
+    });
+    socket.on("down", function(msg){
         var data = JSON.parse(event.data)
         if (data.event_type == "hadashboard")
         {
@@ -48,18 +44,7 @@ function ha_status(stream, dash, widgets)
                 widgets[key].on_ha_data(data);
             }
         })
-    };
-    webSocket.onclose = function (event)
-    {
-        //window.alert("Server closed connection")
-       // window.location.reload(false); 
-    };
-
-    webSocket.onerror = function (event)
-    {
-        //window.alert("Error occured")
-        //window.location.reload(true);         
-    }
+    });
 }
 
 var inheritsFrom = function (child, parent) {

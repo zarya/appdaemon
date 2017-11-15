@@ -14,6 +14,7 @@ REQUIRES = [
     'requests>=2.6.0',
     'sseclient',
     'websocket-client',
+    'python-socketio',
     'async',
     'aiohttp>=2.2.3',
     'Jinja2>=2.9.5',

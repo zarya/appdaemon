@@ -768,7 +768,7 @@ def process_message(data):
         # Update dashboards
 
         if conf.dashboard is True:
-            appdash.ws_update(data)
+            asyncio.ensure_future(appdash.ws_update(data))
 
     except:
         utils.log(conf.error, "WARNING", '-' * 60)

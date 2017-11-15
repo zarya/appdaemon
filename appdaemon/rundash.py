@@ -10,6 +10,7 @@ import feedparser
 from aiohttp import web
 import ssl
 import bcrypt
+import socketio
 
 import appdaemon.conf as conf
 import appdaemon.dashboard as dashboard
@@ -17,8 +18,9 @@ import appdaemon.utils as utils
 
 # Setup WS handler
 
+sio = socketio.AsyncServer(async_mode='aiohttp')
 app = web.Application()
-app['websockets'] = {}
+sio.attach(app)
 
 
 def check_password(password, hash):
@@ -147,7 +149,7 @@ def update_rss():
 
                     data = {"event_type": "state_changed",
                             "data": {"entity_id": feed_data["target"], "new_state": new_state}}
-                    ws_update(data)
+                    asyncio.ensure_future(ws_update(data))
 
             yield from asyncio.sleep(1)
 
@@ -218,54 +220,16 @@ def error(request):
 
 # Websockets Handler
 
-@asyncio.coroutine
-def on_shutdown(application):
-    for ws in application['websockets']:
-        yield from ws.close(code=aiohttp.WSCloseCode.GOING_AWAY,
-                            message='Server shutdown')
+@sio.on('connect', namespace='/socketio')
+async def socketio_connect(sid, environ):
+       utils.log(conf.dash, "INFO", "SocketIO Connection")
+@sio.on('up', namespace='/socketio')
+async def socketio_up_message(sid, message):
+      utils.log(conf.dash, "INFO", "SocketIO Dashboard: %s" % message)
 
-
-@securedata
-@asyncio.coroutine
-def wshandler(request):
-    ws = web.WebSocketResponse()
-    yield from ws.prepare(request)
-
-    request.app['websockets'][ws] = {}
-    # noinspection PyBroadException
-    try:
-        while True:
-            msg = yield from ws.receive()
-            if msg.type == aiohttp.WSMsgType.TEXT:
-                utils.log(conf.dash, "INFO",
-                       "New dashboard connected: {}".format(msg.data))
-                request.app['websockets'][ws]["dashboard"] = msg.data
-            elif msg.type == aiohttp.WSMsgType.ERROR:
-                utils.log(conf.dash, "INFO",
-                       "ws connection closed with exception {}".format(ws.exception()))
-    except:
-        utils.log(conf.dash, "INFO", "Dashboard disconnected")
-    finally:
-        request.app['websockets'].pop(ws, None)
-
-    return ws
-
-
-def ws_update(jdata):
-    if len(app['websockets']) > 0:
-        utils.log(conf.dash,
-               "DEBUG",
-               "Sending data to {} dashes: {}".format(len(app['websockets']), jdata))
-
+async def ws_update(jdata):
     data = json.dumps(jdata)
-
-    for ws in app['websockets']:
-
-        if "dashboard" in app['websockets'][ws]:
-            utils.log(conf.dash,
-                   "DEBUG",
-                   "Found dashboard type {}".format(app['websockets'][ws]["dashboard"]))
-            ws.send_str(data)
+    await sio.emit('down',data,namespace='/socketio')
 
 
 # Routes, Status and Templates
@@ -274,7 +238,6 @@ def setup_routes(dashboard):
     app.router.add_get('/favicon.ico', not_found)
     app.router.add_get('/{gfx}.png', not_found)
     app.router.add_post('/logon', logon)
-    app.router.add_get('/stream', wshandler)
     app.router.add_post('/call_service', call_service)
     app.router.add_get('/state/{entity}', get_state)
     app.router.add_get('/', list_dash)
